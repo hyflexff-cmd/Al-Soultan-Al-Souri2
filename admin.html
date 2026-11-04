@@ -143,6 +143,7 @@ th{background:#9d241b;color:white}
 </div>
 
 <div id="adminContent">
+<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button type="button" onclick="logout()" style="width:auto;margin:0;padding:8px 18px;font-size:13px;background:#777">🚪 تسجيل الخروج</button></div>
 <h1>لوحة تحكم السلطان السوري 👑</h1>
 <p class="role-badge" id="roleBadge"></p>
 
@@ -156,6 +157,7 @@ th{background:#9d241b;color:white}
 <button type="button" class="tab-btn active" id="tabOrdersBtn" onclick="showTab('orders')">📦 الطلبات</button>
 <button type="button" class="tab-btn hidden" id="tabManageBtn" onclick="showTab('manage')">🍽️ التعديلات والأصناف</button>
 <button type="button" class="tab-btn hidden" id="tabSiteBtn" onclick="showTab('site')">🌐 تعديل الموقع</button>
+<button type="button" class="tab-btn hidden" id="tabPayBtn" onclick="showTab('pay')">💳 طرق الدفع</button>
 <button type="button" class="tab-btn hidden" id="tabTextsBtn" onclick="showTab('texts')">✏️ العناوين والنصوص</button>
 </div>
 
@@ -295,6 +297,36 @@ th{background:#9d241b;color:white}
 </div>
 </div>
 
+<div id="payTab" class="hidden">
+<div class="opt-box">
+<h3>💳 طرق الدفع الظاهرة للعملاء</h3>
+<p class="hint">أضف أي طريقة دفع وهتظهر للعميل في صفحة الطلب فورًا. فيه 3 أنواع: <b>عند الاستلام</b>، <b>فودافون كاش عبر شحناوي</b> (دفع أوتوماتيك)، و<b>تحويل يدوي</b> (انستا باي / فودافون كاش / غيره) والعميل بيرفق سكرين التحويل وبتشوفه جوه الطلب.</p>
+<div id="payList"></div>
+</div>
+<div class="opt-box">
+<h3 id="payFormTitle">➕ إضافة طريقة دفع</h3>
+<div class="form-group"><label>اسم الطريقة (اللي بيظهر للعميل)</label><input id="payName" maxlength="40" placeholder="مثال: انستا باي"></div>
+<div class="form-group"><label>نوع الطريقة</label><select id="payType" onchange="payTypeChanged()">
+<option value="manual">تحويل يدوي + إرفاق سكرين (انستا باي / فودافون كاش / ...)</option>
+<option value="gateway">فودافون كاش عبر شحناوي (دفع أوتوماتيك)</option>
+<option value="cash">الدفع عند الاستلام</option></select></div>
+<div class="form-group"><label>الأيقونة</label><select id="payIcon">
+<option value="instapay">انستا باي (IP)</option><option value="vodafone">شعار فودافون</option><option value="cash">💵 كاش</option><option value="card">💳 كارت</option><option value="bank">🏦 بنك</option><option value="phone">📱 موبايل</option></select></div>
+<div class="form-group"><label>سطر صغير تحت الاسم (اختياري)</label><input id="paySub" maxlength="60" placeholder="مثال: حوّل وارفق السكرين"></div>
+<div id="payManualBox">
+<div class="form-group"><label>الرقم / الحساب اللي العميل يحوّل عليه</label><input id="payAccount" dir="ltr" maxlength="80" placeholder="مثال: 01050947239 أو name@instapay"></div>
+<div class="form-group"><label>تعليمات للعميل (اختياري)</label><textarea id="payNote" rows="2" maxlength="300" placeholder="مثال: حوّل المبلغ بالظبط وارفق صورة التحويل"></textarea></div>
+<div class="form-group"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="payProof" checked style="width:auto"> إجبار العميل يرفق سكرين التحويل</label></div>
+</div>
+<div class="form-group"><label>رسوم إضافية % على الطلب (اختياري، سيبها 0 لو مفيش)</label><input id="payFee" type="number" min="0" max="30" step="0.1" value="0"></div>
+<div class="form-group"><label>الترتيب (الأصغر يظهر الأول)</label><input id="payOrder" type="number" min="1" value="10"></div>
+<div class="form-group"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="payEnabled" checked style="width:auto"> ظاهرة للعملاء</label></div>
+<button type="button" class="main-btn" id="paySaveBtn" onclick="savePay()">💾 حفظ طريقة الدفع</button>
+<button type="button" class="main-btn" id="payCancelBtn" onclick="resetPayForm()" style="margin-top:8px;background:#777;display:none">إلغاء التعديل</button>
+<p id="payMsg" class="hint" style="margin-top:8px"></p>
+</div>
+</div>
+
 <div id="textsTab" class="hidden">
 <div class="opt-box">
 <h3>✏️ العناوين والنصوص</h3>
@@ -361,7 +393,6 @@ th{background:#9d241b;color:white}
 
 </div>
 
-<button onclick="logout()" style="margin-top:25px;background:#777">تسجيل الخروج</button>
 </div>
 </div>
 
@@ -463,11 +494,13 @@ if(STAFF_EMAILS.map(e=>e.toLowerCase()).includes(email))return "staff";
 return null;
 }
 window.showTab=function(name){
-if((name==="manage"||name==="site"||name==="texts")&&currentRole!=="manager")return;
+if((name==="manage"||name==="site"||name==="texts"||name==="pay")&&currentRole!=="manager")return;
 $("ordersTab").classList.toggle("hidden",name!=="orders");
 $("manageTab").classList.toggle("hidden",name!=="manage");
 $("siteTab").classList.toggle("hidden",name!=="site");
 $("textsTab").classList.toggle("hidden",name!=="texts");
+$("payTab").classList.toggle("hidden",name!=="pay");
+$("tabPayBtn").classList.toggle("active",name==="pay");
 $("tabTextsBtn").classList.toggle("active",name==="texts");
 $("tabOrdersBtn").classList.toggle("active",name==="orders");
 $("tabManageBtn").classList.toggle("active",name==="manage");
@@ -486,6 +519,7 @@ const isManager=currentRole==="manager";
 $("tabManageBtn").classList.toggle("hidden",!isManager);
 $("tabSiteBtn").classList.toggle("hidden",!isManager);
 $("tabTextsBtn").classList.toggle("hidden",!isManager);
+$("tabPayBtn").classList.toggle("hidden",!isManager);
 $("tabsBar").classList.toggle("hidden",!isManager);
 $("excelBar").classList.toggle("hidden",!isManager);
 $("roleBadge").textContent=isManager?"دخلت كمدير":"دخلت كموظف طلبات";
@@ -500,6 +534,7 @@ watchShop();
 watchSocial();
 watchAreas();
 watchTexts();
+watchPay();
 }
 }
 
@@ -917,6 +952,116 @@ row.append(ic,info,del);
 box.appendChild(row);
 });
 }
+const PAY_DEFAULTS={
+cash:{name:"الدفع عند الاستلام",type:"cash",sub:"ادفع عند وصول الطلب",icon:"cash",order:1,enabled:true},
+vf:{name:"فودافون كاش",type:"gateway",sub:"زيادة 1% رسوم دفع إلكتروني",icon:"vodafone",fee:1,order:2,enabled:true}
+};
+const PAY_TYPES={manual:"تحويل يدوي + سكرين",gateway:"فودافون كاش (شحناوي)",cash:"عند الاستلام"};
+let payMethods={},payWatching=false,payEditId=null;
+function watchPay(){
+if(payWatching)return;
+payWatching=true;
+onValue(dbRef(db,"settings/paymentMethods"),snap=>{
+payMethods=snap.val()||{};
+renderPayList();
+},error=>{
+$("payList").textContent="تعذر تحميل طرق الدفع: "+error.message;
+});
+payTypeChanged();
+}
+window.payTypeChanged=function(){
+$("payManualBox").style.display=$("payType").value==="manual"?"block":"none";
+};
+function renderPayList(){
+const box=$("payList");
+box.replaceChildren();
+const entries=Object.entries(payMethods).filter(([,m])=>m&&m.name).sort((a,b)=>(Number(a[1].order)||0)-(Number(b[1].order)||0));
+if(!entries.length){
+const p=document.createElement("p");
+p.className="hint";
+p.textContent="لسه مفيش طرق محفوظة. الموقع دلوقتي بيعرض: الدفع عند الاستلام + فودافون كاش. أول ما تضيف طريقة جديدة بيتحفظوا الاتنين معاها تلقائيًا وتقدر تعدلهم أو تحذفهم.";
+box.appendChild(p);
+return;
+}
+entries.forEach(([id,m])=>{
+const row=document.createElement("div");
+row.style.cssText="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #f0dfd2;border-radius:10px;padding:10px;margin-bottom:8px;flex-wrap:wrap";
+if(m.enabled===false)row.style.opacity=".55";
+const n=document.createElement("div");
+n.style.cssText="flex:1;min-width:140px;overflow-wrap:anywhere";
+const t=document.createElement("strong");
+t.textContent=m.name;
+const d=document.createElement("div");
+d.style.cssText="font-size:12px;color:#7c6a5a";
+d.textContent=(PAY_TYPES[m.type]||m.type)+(m.account?" · "+m.account:"")+(Number(m.fee)>0?" · رسوم "+m.fee+"%":"")+(m.enabled===false?" · مخفية":"");
+n.append(t,d);
+const tg=document.createElement("button");
+tg.type="button";tg.style.margin="0";tg.textContent=m.enabled===false?"إظهار":"إخفاء";
+tg.addEventListener("click",()=>set(dbRef(db,"settings/paymentMethods/"+id+"/enabled"),m.enabled===false));
+const ed=document.createElement("button");
+ed.type="button";ed.style.margin="0";ed.textContent="تعديل";
+ed.addEventListener("click",()=>editPay(id));
+const del=document.createElement("button");
+del.type="button";del.className="del-btn";del.textContent="حذف";
+del.addEventListener("click",()=>deletePay(id,m.name));
+row.append(n,tg,ed,del);
+box.appendChild(row);
+});
+}
+window.resetPayForm=function(){
+payEditId=null;
+$("payName").value="";$("payType").value="manual";$("payIcon").value="instapay";$("paySub").value="";
+$("payAccount").value="";$("payNote").value="";$("payProof").checked=true;$("payFee").value="0";
+$("payOrder").value=String((Object.keys(payMethods).length+1)*10);$("payEnabled").checked=true;
+$("payFormTitle").textContent="➕ إضافة طريقة دفع";
+$("payCancelBtn").style.display="none";
+payTypeChanged();
+};
+function editPay(id){
+const m=payMethods[id];if(!m)return;
+payEditId=id;
+$("payName").value=m.name||"";$("payType").value=m.type||"manual";$("payIcon").value=m.icon||"cash";
+$("paySub").value=m.sub||"";$("payAccount").value=m.account||"";$("payNote").value=m.note||"";
+$("payProof").checked=m.proof!==false;$("payFee").value=Number(m.fee)||0;$("payOrder").value=Number(m.order)||10;
+$("payEnabled").checked=m.enabled!==false;
+$("payFormTitle").textContent="✏️ تعديل: "+m.name;
+$("payCancelBtn").style.display="block";
+payTypeChanged();
+$("payName").scrollIntoView({behavior:"smooth",block:"center"});
+}
+window.savePay=async function(){
+if(currentRole!=="manager")return;
+const name=$("payName").value.trim();
+const type=$("payType").value;
+const account=$("payAccount").value.trim();
+if(!name){alert("اكتب اسم طريقة الدفع");return;}
+if(type==="manual"&&!account){alert("اكتب الرقم أو الحساب اللي العميل هيحوّل عليه");return;}
+const fee=Math.min(30,Math.max(0,Number($("payFee").value)||0));
+const obj={name,type,icon:$("payIcon").value,sub:$("paySub").value.trim(),fee,order:Number($("payOrder").value)||10,enabled:$("payEnabled").checked};
+if(type==="manual"){obj.account=account;obj.note=$("payNote").value.trim();obj.proof=$("payProof").checked;}
+const btn=$("paySaveBtn");
+btn.disabled=true;
+try{
+const upd={};
+if(!Object.keys(payMethods).length&&!payEditId){
+Object.entries(PAY_DEFAULTS).forEach(([k,v])=>{upd[k]=v;});
+}
+const id=payEditId||push(dbRef(db,"settings/paymentMethods")).key;
+upd[id]=obj;
+await update(dbRef(db,"settings/paymentMethods"),upd);
+$("payMsg").textContent="تم الحفظ ✅";
+resetPayForm();
+}catch(error){
+$("payMsg").textContent="تعذر الحفظ: "+error.message;
+}
+btn.disabled=false;
+};
+async function deletePay(id,name){
+if(currentRole!=="manager")return;
+if(!confirm("حذف طريقة الدفع \""+name+"\"؟"))return;
+try{await remove(dbRef(db,"settings/paymentMethods/"+id));}
+catch(error){alert("تعذر الحذف: "+error.message);}
+}
 let areas={};
 let areasWatching=false;
 function watchAreas(){
@@ -1297,9 +1442,20 @@ if(order.deliveryFee)addLine("🛵 رسوم التوصيل", order.deliveryFee+"
 if(order.deliveryNotes)addLine("📝 ملاحظات التوصيل", order.deliveryNotes);
     addLine("💳 الدفع", order.payment);
     if (order.paymentStatus) addLine("🧾 حالة الدفع", order.paymentStatus);
-    if (order.paymentRef) addLine("🔖 كود العملية", order.paymentRef);
+    if (order.paymentRef) {
+      if (/^https:\/\//.test(order.paymentRef)) {
+        const pp = document.createElement("p");
+        pp.textContent = "🧾 سكرين التحويل (دوس للتكبير):";
+        const lk = document.createElement("a");
+        lk.href = order.paymentRef; lk.target = "_blank"; lk.rel = "noopener";
+        const im = document.createElement("img");
+        im.src = order.paymentRef; im.loading = "lazy";
+        im.style.cssText = "max-width:200px;max-height:260px;border-radius:8px;border:1px solid #ddd;display:block;margin:6px 0";
+        lk.appendChild(im); pp.appendChild(lk); details.appendChild(pp);
+      } else addLine("🔖 كود العملية", order.paymentRef);
+    }
     if (order.email) addLine("📧 حساب جوجل", order.email);
-    if (order.fee) addLine("➕ رسوم فودافون كاش (1%)", order.fee + " ج.م");
+    if (order.fee) addLine("➕ رسوم الدفع", order.fee + " ج.م");
     addLine("💰 الإجمالي", (order.total ?? 0) + " ج.م");
 
     const itemsBox = document.createElement("div");
@@ -1332,9 +1488,9 @@ if(order.deliveryNotes)addLine("📝 ملاحظات التوصيل", order.deliv
     const actions = document.createElement("div");
     actions.className = "order-actions";
 
-    const setStatus = async (value) => {
+    const setStatus = async (value, extra = {}) => {
       try {
-        await update(dbRef(db, "orders/" + id), { status: value });
+        await update(dbRef(db, "orders/" + id), { status: value, ...extra });
         return true;
       } catch (error) {
         alert(error.code === "PERMISSION_DENIED" || /permission/i.test(error.message)
@@ -1353,12 +1509,18 @@ if(order.deliveryNotes)addLine("📝 ملاحظات التوصيل", order.deliv
       ? (st === "تم قبول الطلب" || st === "مكتمل" || st === "ملغي")
       : st !== "جديد";
     acc.onclick = async () => {
+      const sysNo = toEnDigits(String(id in sysDraft ? sysDraft[id] : (order.sysOrderNo || ""))).replace(/\D/g, "");
       const num = String(order.phone || "").replace(/\D/g, "").replace(/^00/, "").replace(/^0/, "20");
+      if (num.length >= 11 && !sysNo) {
+        alert("اكتب رقم الأوردر في السيستم الأول (الخانة اللي تحت)، عشان يتبعت للعميل في رسالة الواتساب.");
+        return;
+      }
       const w = num.length >= 11 ? window.open("", "_blank") : null;
-      const ok = await setStatus("تم قبول الطلب");
+      const ok = await setStatus("تم قبول الطلب", sysNo ? { sysOrderNo: sysNo } : {});
+      if (ok) delete sysDraft[id];
       if (w) {
         if (ok) {
-          const msg = "أهلاً " + (order.name || "") + " 👋\nتم قبول الطلب الخاص بك" + (order.orderNo ? " (رقم " + order.orderNo + ")" : "") + " من قبل المطعم وجاري تجهيزه 🌯\nالسلطان السوري";
+          const msg = "أهلاً " + (order.name || "") + " 👋\nتم قبول الطلب الخاص بك (رقم الأوردر: " + sysNo + ") من قبل المطعم وجاري تجهيزه 🌯\nالسلطان السوري";
           w.location.href = "https://wa.me/" + num + "?text=" + encodeURIComponent(msg);
         } else w.close();
       }
