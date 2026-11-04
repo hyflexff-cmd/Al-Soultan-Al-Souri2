@@ -1124,6 +1124,13 @@ img{max-width:100%}
 body.gate-open .hist-fab{display:none}
 }
 </style>
+<style id="sizeCss">
+.qa-srow{grid-column:1/-1;flex:1 1 100%;width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#f4efe4;border:2px solid transparent;border-radius:16px;padding:8px 14px;transition:.2s}
+.qa-srow.on{border-color:var(--red);background:#fdf0ee}
+.qa-sinfo{display:flex;flex-direction:column;gap:2px}
+.qa-sinfo strong{font-size:15px;color:#17100a}
+.qa-sinfo span{font-size:12.5px;color:#8d8276;font-weight:800}
+</style>
 </head>
 <body class="gate-open">
 <div class="gate checking show" id="welcomeGate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
@@ -1412,6 +1419,32 @@ function qaChip(group, i, name, price, extraText) {
   return b;
 }
 
+function qaSizeRow(s, i) {
+  const r = qaEl('div', 'qa-srow'); r.dataset.i = i;
+  const info = qaEl('div', 'qa-sinfo');
+  info.append(qaEl('strong', '', s.name), qaEl('span', '', s.price + ' ج.م'));
+  const st = qaEl('div', 'qa-stepper');
+  const m = qaEl('button', '', '−'), p = qaEl('button', '', '+');
+  m.type = 'button'; p.type = 'button';
+  m.setAttribute('aria-label', 'تقليل ' + s.name); p.setAttribute('aria-label', 'زيادة ' + s.name);
+  const v = qaEl('span', '', '0'); v.dataset.sv = i;
+  m.onclick = () => { if (qaState.sq[i] > 0) { qaState.sq[i]--; qaRefresh(); } };
+  p.onclick = () => { if (qaState.sq[i] < 50) { qaState.sq[i]++; qaRefresh(); } };
+  st.append(m, v, p); r.append(info, st);
+  return r;
+}
+function qaPerExtras() {
+  const it = qaItem, st = qaState;
+  let x = it.types.length ? (st.type >= 0 ? it.types[st.type].extra : 0) : 0;
+  st.extras.forEach(i => { x += it.extras[i].price; });
+  return x;
+}
+function qaTotalPrice() {
+  const it = qaItem, st = qaState;
+  if (it.sizes.length > 1) { const per = qaPerExtras(); return it.sizes.reduce((t, s, i) => t + st.sq[i] * (s.price + per), 0); }
+  return qaUnitPrice() * st.qty;
+}
+
 function qaGroup(group, label, required, chips) {
   const g = qaEl('div', 'qa-group');
   g.dataset.g = group;
@@ -1421,7 +1454,7 @@ function qaGroup(group, label, required, chips) {
   chips.forEach(x => c.append(x));
   g.append(l, c);
   if (required) {
-    const e = qaEl('div', 'qa-err', group === 'size' ? 'اختار الحجم عشان تقدر تضيفه للسلة' : 'اختار النوع عشان تقدر تضيفه للسلة');
+    const e = qaEl('div', 'qa-err', group === 'size' ? 'اختار حجم واحد على الأقل عشان تقدر تضيفه للسلة' : 'اختار النوع عشان تقدر تضيفه للسلة');
     e.dataset.g = group;
     g.append(e);
   }
@@ -1435,7 +1468,8 @@ function openQuickAdd(raw) {
     size: it.sizes.length === 1 ? 0 : -1,
     type: it.types.length === 1 ? 0 : -1,
     extras: new Set(),
-    qty: 1
+    qty: 1,
+    sq: it.sizes.map(() => 0)
   };
 
   const hero = byId('qaHero'), heroImg = byId('qaHeroImg');
@@ -1460,7 +1494,7 @@ function openQuickAdd(raw) {
   body.replaceChildren();
 
   if (it.sizes.length > 1) {
-    body.append(qaGroup('size', 'اختر الحجم', true, it.sizes.map((s, i) => qaChip('size', i, s.name, s.price))));
+    body.append(qaGroup('size', 'اختر الحجم (ممكن أكتر من حجم)', true, it.sizes.map((s, i) => qaSizeRow(s, i))));
   }
   if (it.types.length > 1) {
     body.append(qaGroup('type', it.typeLabel, true, it.types.map((t, i) => qaChip('type', i, t.name, null, t.extra > 0 ? '+' + t.extra + ' ج.م' : ''))));
@@ -1483,7 +1517,7 @@ function openQuickAdd(raw) {
   plus.onclick = () => { if (qaState.qty < 50) { qaState.qty++; qaRefresh(); } };
   stepper.append(minus, val, plus);
   qty.append(stepper);
-  body.append(qty);
+  if (it.sizes.length <= 1) body.append(qty);
 
   const notes = qaEl('div', 'qa-group');
   const nl = qaEl('div', 'qa-label');
@@ -1526,6 +1560,14 @@ function qaUnitPrice() {
 }
 
 function qaRefresh() {
+  if (qaItem.sizes.length > 1) {
+    qaState.size = qaState.sq.some(n => n > 0) ? 0 : -1;
+    document.querySelectorAll('#qaBody .qa-srow').forEach(r => {
+      const i = Number(r.dataset.i);
+      r.classList.toggle('on', qaState.sq[i] > 0);
+      r.querySelector('[data-sv]').textContent = qaState.sq[i];
+    });
+  }
   document.querySelectorAll('#qaBody .qa-chip').forEach(c => {
     const g = c.dataset.g, i = Number(c.dataset.i);
     const on = g === 'extras' ? qaState.extras.has(i) : qaState[g] === i;
@@ -1533,7 +1575,7 @@ function qaRefresh() {
     c.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
   document.querySelectorAll('#qaBody .qa-err').forEach(e => { e.hidden = qaState[e.dataset.g] >= 0; });
-  byId('qaQtyVal').textContent = qaState.qty;
+  const qv = byId('qaQtyVal'); if (qv) qv.textContent = qaState.qty;
 
   const missing = qaMissing();
   const total = byId('qaTotal');
@@ -1541,7 +1583,7 @@ function qaRefresh() {
   if (missing) {
     total.append(qaEl('small', '', 'يبدأ من'), document.createTextNode(String(qaUnitPrice())), qaEl('small', '', 'ج.م'));
   } else {
-    total.append(document.createTextNode(String(qaUnitPrice() * qaState.qty)), qaEl('small', '', 'ج.م'));
+    total.append(document.createTextNode(String(qaTotalPrice())), qaEl('small', '', 'ج.م'));
   }
 }
 
@@ -1555,18 +1597,25 @@ function qaSubmit() {
     return;
   }
   const it = qaItem, st = qaState;
-  const entry = {
+  const key = e => [e.title, e.size, e.type, e.extras.join(','), e.notes].join('||');
+  const add = entry => {
+    const found = cart.find(i => key(i) === key(entry));
+    if (found) found.qty += entry.qty; else cart.push(entry);
+  };
+  const base = {
     title: it.title,
-    price: qaUnitPrice(),
-    size: it.sizes.length ? it.sizes[st.size].name : '',
     type: it.types.length ? it.types[st.type].name : '',
     extras: [...st.extras].sort((a, b) => a - b).map(i => it.extras[i].name),
-    notes: byId('qaNotes').value.trim(),
-    qty: st.qty
+    notes: byId('qaNotes').value.trim()
   };
-  const key = e => [e.title, e.size, e.type, e.extras.join(','), e.notes].join('||');
-  const found = cart.find(i => key(i) === key(entry));
-  if (found) found.qty += entry.qty; else cart.push(entry);
+  if (it.sizes.length > 1) {
+    const per = qaPerExtras();
+    it.sizes.forEach((sz, i) => {
+      if (st.sq[i] > 0) add({ ...base, extras: [...base.extras], price: sz.price + per, size: sz.name, qty: st.sq[i] });
+    });
+  } else {
+    add({ ...base, price: qaUnitPrice(), size: it.sizes.length ? it.sizes[st.size].name : '', qty: st.qty });
+  }
 
   closeQuickAdd();
   updateCart();
